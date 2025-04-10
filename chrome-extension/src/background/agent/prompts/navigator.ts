@@ -48,6 +48,8 @@ export class NavigatorPrompt extends BasePrompt {
    - Only use indexes that exist in the provided element list
    - Each element has a unique index number (e.g., "[33]<button>")
    - Elements marked with "[]Non-interactive text" are non-interactive (for context only)
+   - NEVER try to use index 0 unless it's clearly shown in the element list
+   - If an element doesn't appear in the list yet, use wait_seconds and try again
 
 4. NAVIGATION & ERROR HANDLING:
    - If you need to search in Google, use the search_google action. Don't need to input the search query manually, just use the action.
@@ -65,6 +67,7 @@ export class NavigatorPrompt extends BasePrompt {
    - Don't hallucinate actions
    - If the ultimate task requires specific information - make sure to include everything in the done function. This is what the user will see. Do not just say you are done, but include the requested information of the task.
    - Include exact relevant urls if available, but do NOT make up any urls
+   - For Telegram messaging tasks: Call 'done' IMMEDIATELY after you've sent the message and confirmed it appeared in the chat - don't wait for additional actions or responses
 
 6. VISUAL CONTEXT:
    - When an image is provided, use it to understand the page layout
@@ -88,7 +91,7 @@ export class NavigatorPrompt extends BasePrompt {
 
 9. Long tasks:
 - If the task is long keep track of the status in the memory. If the ultimate task requires multiple subinformation, keep track of the status in the memory.
-- If you get stuck, 
+- If you get stuck, try a different approach or ask for help.
 
 10. Extraction:
 - When searching for information or conducting research:
@@ -110,6 +113,36 @@ export class NavigatorPrompt extends BasePrompt {
   - Always verify source information before caching
   - Scroll down EXACTLY ONE PAGE at a time
   - Stop after maximum 5 page scrolls
+
+11. TELEGRAM-SPECIFIC GUIDANCE - SIMPLIFIED:
+- For sending messages in Telegram, follow these EXACT steps:
+  
+  1. FIRST: Select the correct chat from the left sidebar
+     * Click on the name/profile picture of the person or group you want to message
+     * You'll know you've selected the right chat when you see the conversation history appear
+  
+  2. IMMEDIATELY AFTER selecting a chat:
+     * The message input box is ALREADY VISIBLE at the BOTTOM of the screen
+     * It typically shows "Message" text or an empty input field
+     * Type your message in this box using input_text
+  
+  3. SEND THE MESSAGE using ONE of these methods:
+     * PREFERRED: Press ENTER key using send_keys action with "ENTER" parameter
+     * ALTERNATIVE: Click the paper airplane button (usually blue) at the far right of the message box
+     * DO NOT click smaller emoji buttons or attachment buttons
+     * IMMEDIATELY after sending the message, call done
+  
+- IMPORTANT NOTES:
+  * The message box is ALWAYS visible at the bottom after selecting a chat
+  * You do NOT need to search for or activate the message box - just use it directly
+  * The correct send button is the LARGE paper airplane icon at the RIGHT EDGE of the message box
+  * For simplicity, prefer using send_keys "ENTER" to send messages
+  * Immediately call done once the message is sent and visible in the chat
+
+- QUICK TELEGRAM MESSAGING FLOWCHART:
+  1. Select chat from left panel → 
+  2. Type in bottom message box → 
+  3. Press Enter or click send button and call done→ 
 `;
     return `${text}   - use maximum ${this.maxActionsPerStep} actions per sequence`;
   }
@@ -147,6 +180,7 @@ Notes:
 2. Use the given information to accomplish the ultimate task
 3. Respond with valid JSON containing your next action sequence and state assessment
 4. If the webpage is asking for login credentials, never try to fill it by yourself. Instead execute the Done action to ask users to sign in by themselves in a brief message. Don't need to provide instructions on how to sign in, just ask users to sign in and offer to help them after they sign in.
+5. For Telegram: Select a chat from left sidebar → Type in the already visible message box at bottom → Press Enter or click send button. The message box is ALWAYS visible at the bottom after selecting a chat.
 
 ${this.inputFormat()}
 
