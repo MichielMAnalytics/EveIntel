@@ -256,6 +256,18 @@ export const jsonNavigatorOutputSchema = {
             type: 'object',
             nullable: true,
           },
+          close_tab: {
+            properties: {
+              tab_id: {
+                title: 'Tab Id',
+                type: 'integer',
+                nullable: true,
+              },
+            },
+            title: 'CloseTabAction',
+            type: 'object',
+            nullable: true,
+          },
         },
         title: 'ActionModel',
         type: 'object',

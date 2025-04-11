@@ -1,11 +1,11 @@
 {
   "extensionDescription": {
     "description": "Extension description",
-    "message": "Automate web tasks with AI! NanoBrowser is an open-source Chrome extension that lets you extract data, fill forms, and more."
+    "message": "EVE Intel is an open-source Chrome extension that lets you share your thoughts in any format to any platform."
   },
   "extensionName": {
     "description": "Extension name",
-    "message": "Nanobrowser: AI Web Agent & Automation"
+    "message": "EVE Intel: Always there to share your thoughts"
   },
   "toggleTheme": {
     "message": "Toggle theme"

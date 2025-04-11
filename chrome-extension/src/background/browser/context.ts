@@ -78,14 +78,19 @@ export default class BrowserContext {
     }
   }
 
-  public async getCurrentPage(): Promise<Page> {
+  public async getCurrentPage(options: { background?: boolean } = { background: true }): Promise<Page> {
+    const background = options.background !== false; // Default to true unless explicitly set to false
+
     // 1. If _currentTabId not set, query the active tab and attach it
     if (!this._currentTabId) {
       let activeTab: chrome.tabs.Tab;
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) {
-        // open a new tab with blank page
-        const newTab = await chrome.tabs.create({ url: this._config.homePageUrl });
+        // open a new tab with blank page in background if specified
+        const newTab = await chrome.tabs.create({
+          url: this._config.homePageUrl,
+          active: !background,
+        });
         if (!newTab.id) {
           // this should rarely happen
           throw new Error('No tab ID available');
@@ -94,7 +99,7 @@ export default class BrowserContext {
       } else {
         activeTab = tab;
       }
-      logger.info('active tab', activeTab.id, activeTab.url, activeTab.title);
+      logger.info('active tab', activeTab.id, activeTab.url, activeTab.title, background ? '(background)' : '');
       const page = await this._getOrCreatePage(activeTab);
       await this.attachPage(page);
       this._currentTabId = activeTab.id || null;
@@ -145,18 +150,17 @@ export default class BrowserContext {
     if (waitForUpdate) {
       const updatePromise = new Promise<void>(resolve => {
         let hasUrl = false;
-        let hasTitle = false;
         let isComplete = false;
 
         const onUpdatedHandler = (updatedTabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
           if (updatedTabId !== tabId) return;
 
           if (changeInfo.url) hasUrl = true;
-          if (changeInfo.title) hasTitle = true;
           if (changeInfo.status === 'complete') isComplete = true;
 
-          // Resolve when we have all the information we need
-          if (hasUrl && hasTitle && isComplete) {
+          // Resolve when we have the information we need
+          // For background tabs, we can be more lenient about title
+          if (hasUrl && isComplete) {
             chrome.tabs.onUpdated.removeListener(onUpdatedHandler);
             resolve();
           }
@@ -166,10 +170,9 @@ export default class BrowserContext {
         // Check current state
         chrome.tabs.get(tabId).then(tab => {
           if (tab.url) hasUrl = true;
-          if (tab.title) hasTitle = true;
           if (tab.status === 'complete') isComplete = true;
 
-          if (hasUrl && hasTitle && isComplete) {
+          if (hasUrl && isComplete) {
             chrome.tabs.onUpdated.removeListener(onUpdatedHandler);
             resolve();
           }
@@ -178,6 +181,7 @@ export default class BrowserContext {
       promises.push(updatePromise);
     }
 
+    // Skip activation waiting for background tabs
     if (waitForActivation) {
       const activatedPromise = new Promise<void>(resolve => {
         const onActivatedHandler = (activeInfo: chrome.tabs.TabActiveInfo) => {
@@ -206,34 +210,44 @@ export default class BrowserContext {
     await Promise.race([Promise.all(promises), timeoutPromise]);
   }
 
-  public async switchTab(tabId: number): Promise<Page> {
-    logger.info('switchTab', tabId);
+  public async switchTab(tabId: number, background: boolean = false): Promise<Page> {
+    logger.info('switchTab', tabId, background ? '(background)' : '');
 
-    await chrome.tabs.update(tabId, { active: true });
-    await this.waitForTabEvents(tabId, { waitForUpdate: false });
+    // Only set tab as active if we're not in background mode
+    if (!background) {
+      await chrome.tabs.update(tabId, { active: true });
+      await this.waitForTabEvents(tabId, { waitForUpdate: false });
+    }
 
     const page = await this._getOrCreatePage(await chrome.tabs.get(tabId));
     await this.attachPage(page);
+
+    // Always update the current tab ID for internal tracking, even in background mode
     this._currentTabId = tabId;
     return page;
   }
 
-  public async navigateTo(url: string): Promise<void> {
-    const page = await this.getCurrentPage();
+  public async navigateTo(url: string, background: boolean = true): Promise<void> {
+    const page = await this.getCurrentPage({ background });
     if (!page) {
-      await this.openTab(url);
+      await this.openTab(url, background);
       return;
     }
+
     // if page is attached, use puppeteer to navigate to the url
     if (page.attached) {
       await page.navigateTo(url);
       return;
     }
+
     //  Use chrome.tabs.update only if the page is not attached
     const tabId = page.tabId;
-    // Update tab and wait for events
-    await chrome.tabs.update(tabId, { url, active: true });
-    await this.waitForTabEvents(tabId);
+    // Update tab and wait for events - don't activate if in background mode
+    await chrome.tabs.update(tabId, { url, active: !background });
+    await this.waitForTabEvents(tabId, {
+      waitForUpdate: true,
+      waitForActivation: !background,
+    });
 
     // Reattach the page after navigation completes
     const updatedPage = await this._getOrCreatePage(await chrome.tabs.get(tabId), true);
@@ -241,21 +255,29 @@ export default class BrowserContext {
     this._currentTabId = tabId;
   }
 
-  public async openTab(url: string): Promise<Page> {
-    // Create the new tab
-    const tab = await chrome.tabs.create({ url, active: true });
+  public async openTab(url: string, background: boolean = false): Promise<Page> {
+    // Create the new tab, with active set to !background
+    const tab = await chrome.tabs.create({ url, active: !background });
     if (!tab.id) {
       throw new Error('No tab ID available');
     }
-    // Wait for tab events
-    await this.waitForTabEvents(tab.id);
+
+    // Wait for tab events - don't wait for activation if in background
+    await this.waitForTabEvents(tab.id, {
+      waitForUpdate: true,
+      waitForActivation: !background,
+    });
 
     // Get updated tab information
     const updatedTab = await chrome.tabs.get(tab.id);
-    // Create and attach the page after tab is fully loaded and activated
+    // Create and attach the page after tab is fully loaded
     const page = await this._getOrCreatePage(updatedTab);
     await this.attachPage(page);
-    this._currentTabId = tab.id;
+
+    // Only update current tab ID if tab is active
+    if (!background) {
+      this._currentTabId = tab.id;
+    }
 
     return page;
   }

@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { IoSendSharp } from 'react-icons/io5';
+import { FaXTwitter } from 'react-icons/fa6';
+import { GiCancel } from 'react-icons/gi';
 
 interface ChatInputProps {
   onSendMessage: (text: string) => void;
+  onSendToX?: (text: string) => void;
   onStopTask: () => void;
   disabled: boolean;
   showStopButton: boolean;
@@ -11,6 +15,7 @@ interface ChatInputProps {
 
 export default function ChatInput({
   onSendMessage,
+  onSendToX,
   onStopTask,
   disabled,
   showStopButton,
@@ -71,6 +76,14 @@ export default function ChatInput({
     [handleSubmit],
   );
 
+  const handleSendToX = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (text.trim() && !disabled && onSendToX) {
+      onSendToX(text);
+      setText('');
+    }
+  };
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -112,13 +125,30 @@ export default function ChatInput({
               Stop
             </button>
           ) : (
-            <button
-              type="submit"
-              disabled={isSendButtonDisabled}
-              aria-disabled={isSendButtonDisabled}
-              className={`rounded-md bg-[#19C2FF] px-3 py-1 text-white transition-colors hover:enabled:bg-[#0073DC] ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
-              Send
-            </button>
+            <div className="flex gap-2 items-center">
+              {onSendToX && (
+                <button
+                  type="button"
+                  onClick={handleSendToX}
+                  disabled={isSendButtonDisabled}
+                  aria-disabled={isSendButtonDisabled}
+                  className={`rounded-md px-3 py-1 transition-colors flex items-center justify-center ${
+                    isSendButtonDisabled
+                      ? 'cursor-not-allowed opacity-50 bg-gray-300'
+                      : 'bg-black text-white hover:enabled:bg-gray-800'
+                  } ${isDarkMode && !isSendButtonDisabled ? 'bg-gray-700 hover:enabled:bg-gray-600' : ''}`}
+                  title="Post to X - Opens X.com and focuses the post area">
+                  <FaXTwitter size={16} />
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={isSendButtonDisabled}
+                aria-disabled={isSendButtonDisabled}
+                className={`rounded-md bg-[#19C2FF] px-3 py-1 text-white transition-colors hover:enabled:bg-[#0073DC] ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                Send
+              </button>
+            </div>
           )}
         </div>
       </div>

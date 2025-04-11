@@ -4,6 +4,7 @@ import { RxDiscordLogo } from 'react-icons/rx';
 import { FiSettings } from 'react-icons/fi';
 import { PiPlusBold } from 'react-icons/pi';
 import { GrHistory } from 'react-icons/gr';
+import { FaXTwitter } from 'react-icons/fa6';
 import { type Message, Actors, chatHistoryStore } from '@extension/storage';
 import MessageList from './components/MessageList';
 import ChatInput from './components/ChatInput';
@@ -469,6 +470,80 @@ const SidePanel = () => {
     }
   };
 
+  const handleSendToX = async (text: string) => {
+    // Open X.com in a new background tab (active: false)
+    const newTab = await chrome.tabs.create({ url: 'https://x.com/home', active: false });
+
+    // Wait for the page to load and then focus on the post text area
+    chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+      // Only proceed if this is our tab and it's done loading
+      if (tabId === newTab.id && changeInfo.status === 'complete') {
+        // Remove the listener to avoid multiple executions
+        chrome.tabs.onUpdated.removeListener(listener);
+
+        // Execute script to focus on the post text area
+        chrome.scripting.executeScript({
+          target: { tabId: newTab.id },
+          func: () => {
+            // Select the post text area - X.com typically uses a contenteditable div
+            // with placeholder text "What's happening?" or similar
+            setTimeout(() => {
+              // Try various selectors that might work for the post input field
+              const selectors = [
+                'div[data-testid="tweetTextarea_0"]',
+                'div[aria-label="Post text"]',
+                'div[aria-label="Tweet text"]',
+                'div[data-contents="true"]',
+                'div[role="textbox"]',
+                'div[contenteditable="true"]',
+                // Target based on placeholder text
+                'div[placeholder="What\'s happening?"]',
+                'div[data-placeholder="What\'s happening?"]',
+              ];
+
+              // Try each selector until we find one that works
+              for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element && element instanceof HTMLElement) {
+                  element.focus();
+                  break;
+                }
+              }
+
+              // Try XPath as a fallback to find element containing "What's happening?"
+              try {
+                const xpathResult = document.evaluate(
+                  '//*[contains(text(), "What\'s happening?")]',
+                  document,
+                  null,
+                  XPathResult.FIRST_ORDERED_NODE_TYPE,
+                  null,
+                );
+
+                const xpathElement = xpathResult.singleNodeValue;
+                if (xpathElement && xpathElement instanceof HTMLElement) {
+                  xpathElement.focus();
+                }
+              } catch (e) {
+                console.error('XPath evaluation error:', e);
+              }
+
+              // Click on the post area as a fallback if focus doesn't work
+              const postArea =
+                document.querySelector('div[aria-label="Post text"]') || document.querySelector('div[role="textbox"]');
+              if (postArea && postArea instanceof HTMLElement) {
+                postArea.click();
+              }
+            }, 1000); // Slight delay to ensure the page is fully rendered
+          },
+        });
+      }
+    });
+
+    // Then send the message/task normally
+    await handleSendMessage(text);
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -559,6 +634,7 @@ const SidePanel = () => {
                   className={`border-t ${isDarkMode ? 'border-sky-900' : 'border-sky-100'} mb-2 p-2 shadow-sm backdrop-blur-sm`}>
                   <ChatInput
                     onSendMessage={handleSendMessage}
+                    onSendToX={handleSendToX}
                     onStopTask={handleStopTask}
                     disabled={!inputEnabled || isHistoricalSession}
                     showStopButton={showStopButton}
@@ -587,6 +663,7 @@ const SidePanel = () => {
                 className={`border-t ${isDarkMode ? 'border-sky-900' : 'border-sky-100'} p-2 shadow-sm backdrop-blur-sm`}>
                 <ChatInput
                   onSendMessage={handleSendMessage}
+                  onSendToX={handleSendToX}
                   onStopTask={handleStopTask}
                   disabled={!inputEnabled || isHistoricalSession}
                   showStopButton={showStopButton}

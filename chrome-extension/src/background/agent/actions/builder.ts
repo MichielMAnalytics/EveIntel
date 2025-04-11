@@ -17,6 +17,7 @@ import {
   cacheContentActionSchema,
   selectDropdownOptionActionSchema,
   getDropdownOptionsActionSchema,
+  closeTabActionSchema,
 } from './schemas';
 import { z } from 'zod';
 import { createLogger } from '@src/background/log';
@@ -145,9 +146,9 @@ export class ActionBuilder {
       const msg = `Searching for "${input.query}" in Google`;
       context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, msg);
 
-      await context.browserContext.navigateTo(`https://www.google.com/search?q=${input.query}`);
+      await context.browserContext.navigateTo(`https://www.google.com/search?q=${input.query}`, true);
 
-      const msg2 = `Searched for "${input.query}" in Google`;
+      const msg2 = `Searched for "${input.query}" in Google (background)`;
       context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg2);
       return new ActionResult({
         extractedContent: msg2,
@@ -160,8 +161,10 @@ export class ActionBuilder {
       const msg = `Navigating to ${input.url}`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, msg);
 
-      await this.context.browserContext.navigateTo(input.url);
-      const msg2 = `Navigated to ${input.url}`;
+      // Always use background mode (true parameter)
+      await this.context.browserContext.navigateTo(input.url, true);
+
+      const msg2 = `Navigated to ${input.url} (in background)`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg2);
       return new ActionResult({
         extractedContent: msg2,
@@ -175,9 +178,10 @@ export class ActionBuilder {
       const msg = 'Navigating back';
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, msg);
 
-      const page = await this.context.browserContext.getCurrentPage();
+      // Get current page in background mode
+      const page = await this.context.browserContext.getCurrentPage({ background: true });
       await page.goBack();
-      const msg2 = 'Navigated back';
+      const msg2 = 'Navigated back (background)';
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg2);
       return new ActionResult({
         extractedContent: msg2,
@@ -192,7 +196,7 @@ export class ActionBuilder {
         const todo = input.desc || `Click element with index ${input.index}`;
         this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, todo);
 
-        const page = await this.context.browserContext.getCurrentPage();
+        const page = await this.context.browserContext.getCurrentPage({ background: true });
         const state = await page.getState();
 
         const elementNode = state?.selectorMap.get(input.index);
@@ -248,7 +252,7 @@ export class ActionBuilder {
         const todo = input.desc || `Input text into index ${input.index}`;
         this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, todo);
 
-        const page = await this.context.browserContext.getCurrentPage();
+        const page = await this.context.browserContext.getCurrentPage({ background: true });
         const state = await page.getState();
 
         const elementNode = state?.selectorMap.get(input.index);
@@ -269,27 +273,63 @@ export class ActionBuilder {
     // Tab Management Actions
     const switchTab = new Action(async (input: z.infer<typeof switchTabActionSchema.schema>) => {
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, `Switching to tab ${input.tab_id}`);
-      await this.context.browserContext.switchTab(input.tab_id);
-      const msg = `Switched to tab ${input.tab_id}`;
+      // Always use background mode (true) to avoid changing the user's focus
+      await this.context.browserContext.switchTab(input.tab_id, true);
+      const msg = `Switched to tab ${input.tab_id} (in background)`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
       return new ActionResult({ extractedContent: msg, includeInMemory: true });
     }, switchTabActionSchema);
     actions.push(switchTab);
 
     const openTab = new Action(async (input: z.infer<typeof openTabActionSchema.schema>) => {
-      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, `Opening ${input.url} in new tab`);
-      await this.context.browserContext.openTab(input.url);
-      const msg = `Opened ${input.url} in new tab`;
+      this.context.emitEvent(
+        Actors.NAVIGATOR,
+        ExecutionState.ACT_START,
+        `Opening ${input.url} in new tab (background)`,
+      );
+
+      // Ensure we create a new tab in background mode
+      const page = await this.context.browserContext.openTab(input.url, true);
+
+      // Store the tab ID in the action result for future reference
+      const msg = `Opened ${input.url} in new tab (ID: ${page.tabId}, background mode)`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
-      return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      return new ActionResult({
+        extractedContent: msg,
+        includeInMemory: true,
+      });
     }, openTabActionSchema);
     actions.push(openTab);
+
+    // Add close tab action
+    const closeTab = new Action(async (input: z.infer<typeof closeTabActionSchema.schema>) => {
+      const tabId = input.tab_id;
+
+      if (tabId) {
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, `Closing tab ${tabId}`);
+        await this.context.browserContext.closeTab(tabId);
+        const msg = `Closed tab ${tabId}`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+        return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      } else {
+        // Get current tab and close it
+        const page = await this.context.browserContext.getCurrentPage({ background: true });
+        const currentTabId = page.tabId;
+
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, `Closing current tab ${currentTabId}`);
+        await this.context.browserContext.closeTab(currentTabId);
+        const msg = `Closed current tab ${currentTabId}`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+        return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      }
+    }, closeTabActionSchema);
+    actions.push(closeTab);
 
     // Content Actions
     // TODO: this is not used currently, need to improve on input size
     const extractContent = new Action(async (input: z.infer<typeof extractContentActionSchema.schema>) => {
       const goal = input.goal;
-      const page = await this.context.browserContext.getCurrentPage();
+      const page = await this.context.browserContext.getCurrentPage({ background: true });
       const content = await page.getReadabilityContent();
       const promptTemplate = PromptTemplate.fromTemplate(
         'Your task is to extract the content of the page. You will be given a page and a goal and you should extract all relevant information around this goal from the page. If the goal is vague, summarize the page. Respond in json format. Extraction goal: {goal}, Page: {page}',
@@ -329,7 +369,7 @@ export class ActionBuilder {
       const todo = input.desc || 'Scroll down the page';
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, todo);
 
-      const page = await this.context.browserContext.getCurrentPage();
+      const page = await this.context.browserContext.getCurrentPage({ background: true });
       await page.scrollDown(input.amount);
       const amount = input.amount !== undefined ? `${input.amount} pixels` : 'one page';
       const msg = `Scrolled down the page by ${amount}`;
@@ -342,7 +382,7 @@ export class ActionBuilder {
       const todo = input.desc || 'Scroll up the page';
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, todo);
 
-      const page = await this.context.browserContext.getCurrentPage();
+      const page = await this.context.browserContext.getCurrentPage({ background: true });
       await page.scrollUp(input.amount);
       const amount = input.amount !== undefined ? `${input.amount} pixels` : 'one page';
       const msg = `Scrolled up the page by ${amount}`;
@@ -356,7 +396,7 @@ export class ActionBuilder {
       const todo = input.desc || `Send keys: ${input.keys}`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, todo);
 
-      const page = await this.context.browserContext.getCurrentPage();
+      const page = await this.context.browserContext.getCurrentPage({ background: true });
       await page.sendKeys(input.keys);
       const msg = `Sent keys: ${input.keys}`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
@@ -368,7 +408,7 @@ export class ActionBuilder {
       const todo = input.desc || `Scroll to text: ${input.text}`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, todo);
 
-      const page = await this.context.browserContext.getCurrentPage();
+      const page = await this.context.browserContext.getCurrentPage({ background: true });
       try {
         const scrolled = await page.scrollToText(input.text);
         const msg = scrolled
@@ -390,7 +430,7 @@ export class ActionBuilder {
         const todo = `Getting options from dropdown with index ${input.index}`;
         this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, todo);
 
-        const page = await this.context.browserContext.getCurrentPage();
+        const page = await this.context.browserContext.getCurrentPage({ background: true });
         const state = await page.getState();
 
         const elementNode = state?.selectorMap.get(input.index);
@@ -460,7 +500,7 @@ export class ActionBuilder {
         const todo = `Select option "${input.text}" from dropdown with index ${input.index}`;
         this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, todo);
 
-        const page = await this.context.browserContext.getCurrentPage();
+        const page = await this.context.browserContext.getCurrentPage({ background: true });
         const state = await page.getState();
 
         const elementNode = state?.selectorMap.get(input.index);

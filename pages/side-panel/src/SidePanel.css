@@ -163,3 +163,28 @@ code {
     border-color: #475569 !important; /* slate-600 */
   }
 }
+
+.x-button {
+  color: #19C2FF;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  opacity: 0.8;
+}
+
+.x-button:hover {
+  color: #000000; /* Black color on hover for the X logo */
+  opacity: 1;
+}
+
+.x-button:disabled {
+  color: #CBD5E1;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Dark mode support for the X button */
+@media (prefers-color-scheme: dark) {
+  .x-button:hover {
+    color: #FFFFFF; /* White color on hover for dark mode */
+  }
+}

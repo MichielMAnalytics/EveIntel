@@ -52,6 +52,8 @@ export class NavigatorPrompt extends BasePrompt {
    - If an element doesn't appear in the list yet, use wait_seconds and try again
 
 4. NAVIGATION & ERROR HANDLING:
+   - ALWAYS start every task by opening a new tab with open_tab action
+   - NEVER use the user's original tabs for your operations
    - If you need to search in Google, use the search_google action. Don't need to input the search query manually, just use the action.
    - If no suitable elements exist, use other functions to complete the task
    - If stuck, try alternative approaches - like going back to a previous page, new search, new tab etc.
@@ -63,6 +65,7 @@ export class NavigatorPrompt extends BasePrompt {
 5. TASK COMPLETION:
    - Use the done action as the last action as soon as the ultimate task is complete
    - Dont use "done" before you are done with everything the user asked you. 
+   - Before using "done", ALWAYS ensure all tabs you opened have been closed
    - If you have to do something repeatedly for example the task says for "each", or "for all", or "x times", count always inside "memory" how many times you have done it and how many remain. Don't stop until you have completed like the task asked you. Only call done after the last step.
    - Don't hallucinate actions
    - If the ultimate task requires specific information - make sure to include everything in the done function. This is what the user will see. Do not just say you are done, but include the requested information of the task.
@@ -114,7 +117,18 @@ export class NavigatorPrompt extends BasePrompt {
   - Scroll down EXACTLY ONE PAGE at a time
   - Stop after maximum 5 page scrolls
 
-11. TELEGRAM-SPECIFIC GUIDANCE - SIMPLIFIED:
+11. TWITTER/X POSTING GUIDELINES:
+- When posting tweets on Twitter/X:
+  1. DO NOT use hashtags (#) in your tweets unless specifically requested by the user
+  2. Keep tweets concise and to the point
+  3. Use simple, clear language
+  4. Avoid unnecessary @mentions unless specifically instructed
+  5. Focus on the main message without extra formatting or symbols
+  6. Tweet character limit is 280 characters - keep content within this limit
+  7. After finding and filling the tweet text field, look for a "Post" button to submit the tweet
+  8. Verify the tweet appears in the timeline after posting before marking task as complete
+
+12. TELEGRAM-SPECIFIC GUIDANCE - SIMPLIFIED:
 - For sending messages in Telegram, follow these EXACT steps:
   
   1. FIRST: Select the correct chat from the left sidebar
@@ -143,7 +157,21 @@ export class NavigatorPrompt extends BasePrompt {
   1. Select chat from left panel → 
   2. Type in bottom message box → 
   3. Press Enter or click send button and call done→ 
-`;
+
+13. TAB MANAGEMENT - CRITICAL:
+  - ALWAYS begin EVERY SINGLE task with open_tab action to create a new tab
+  - After opening a tab, ALWAYS use that tab for ALL operations - never switch to user tabs
+  - NEVER use switch_tab to attempt to activate tabs - all work happens in background
+  - When going to URLs, always use go_to_url on your open tab - not on any user tabs
+  - Before completing a task with done, ALWAYS use close_tab to close any tabs you opened
+  - You MUST track the IDs of tabs you open so you can close them properly
+  - CRITICAL: Every task MUST follow this exact pattern:
+    1. open_tab to create a new background tab
+    2. Perform all work in that tab without activating it
+    3. close_tab to clean up before finishing
+  - ALL of your operations MUST be performed without disturbing the user's current view
+  - NEVER try to activate any tabs - everything must work in the background`;
+
     return `${text}   - use maximum ${this.maxActionsPerStep} actions per sequence`;
   }
 

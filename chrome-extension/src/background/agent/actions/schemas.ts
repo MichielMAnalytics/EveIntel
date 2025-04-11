@@ -64,6 +64,7 @@ export const switchTabActionSchema: ActionSchema = {
   description: 'Switch to tab by id',
   schema: z.object({
     tab_id: z.number(),
+    background: z.boolean().optional().describe('Set to true to switch in background without changing focus'),
   }),
 };
 
@@ -72,6 +73,14 @@ export const openTabActionSchema: ActionSchema = {
   description: 'Open URL in new tab',
   schema: z.object({
     url: z.string(),
+  }),
+};
+
+export const closeTabActionSchema: ActionSchema = {
+  name: 'close_tab',
+  description: 'Close a tab by its ID',
+  schema: z.object({
+    tab_id: z.number().optional().describe('The ID of the tab to close. If not provided, closes the current tab'),
   }),
 };
 

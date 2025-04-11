@@ -17,6 +17,7 @@ export interface AgentOptions {
   validateOutput: boolean;
   includeAttributes: string[];
   planningInterval: number;
+  backgroundMode: boolean;
 }
 
 export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
@@ -43,6 +44,7 @@ export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
     'aria-expanded',
   ],
   planningInterval: 3,
+  backgroundMode: true,
 };
 
 export class AgentContext {
